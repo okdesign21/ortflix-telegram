@@ -1,0 +1,285 @@
+"""Centralized configuration for Telegram bot integrations.
+
+Manages URLs, API keys, and extensible webhook handlers.
+"""
+
+import os
+from typing import Callable, Optional
+
+
+# ====== UTILITIES ======
+def _clean_username(name: Optional[str]) -> Optional[str]:
+    """Slugify username: ASCII alphanumeric + hyphens only (for display).
+    Returns None if username contains non-ASCII characters.
+    Identical to tautulli_utils._clean_username for consistency.
+    """
+    if not name:
+        return None
+    # Only keep ASCII letters, digits, and replace others with hyphens
+    cleaned = "".join(ch.lower() if (ch.isascii() and ch.isalnum()) else "-" for ch in str(name))
+    cleaned = cleaned.strip("-")
+    while "--" in cleaned:
+        cleaned = cleaned.replace("--", "-")
+    # If no valid ASCII alphanumeric chars remain, return None for fallback
+    if not cleaned or not any(ch.isascii() and ch.isalnum() for ch in cleaned):
+        return None
+    return cleaned
+
+
+# ====== SERVICE URLS ======
+def _get_service_url(
+    env_var: str, default_host: str, default_port: int, fallback_host: str = None
+) -> str:
+    """Get service URL from env or construct from host:port.
+
+    Args:
+        env_var: Environment variable name for the URL (e.g., "OVERSEERR_URL")
+        default_host: Primary default hostname
+        default_port: Default port number
+        fallback_host: Optional fallback hostname to try if default_host doesn't resolve
+    """
+    url = os.getenv(env_var)
+    if url:
+        return url.rstrip("/")
+    host = os.getenv(f"{env_var.replace('_URL', '_HOST')}", default_host)
+    port = os.getenv(f"{env_var.replace('_URL', '_PORT')}", str(default_port))
+    return f"http://{host}:{port}"
+
+
+# Service URLs (for both bot and tautulli script usage)
+# Supports both "seerr" (newer) and "overseerr" (legacy) as default hostnames
+OVERSEERR_URL = _get_service_url("OVERSEERR_URL", "seerr", 5055)
+RADARR_URL = _get_service_url("RADARR_URL", "radarr", 7878)
+SONARR_URL = _get_service_url("SONARR_URL", "sonarr", 8989)
+
+# API Keys
+OVERSEERR_API_KEY = os.getenv("OVERSEERR_API_KEY") or os.getenv("API_KEY")
+RADARR_API_KEY = os.getenv("RADARR_API_KEY")
+SONARR_API_KEY = os.getenv("SONARR_API_KEY")
+
+# Telegram
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID_RAW = os.getenv("TELEGRAM_CHAT_ID")
+WEBHOOK_PORT = int(os.getenv("WEBHOOK_PORT", 7777))
+WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "0.0.0.0")  # nosec B104
+WEBHOOK_TOKEN = os.getenv("WEBHOOK_TOKEN")
+TELEGRAM_PORT = WEBHOOK_PORT
+TELEGRAM_HOST = WEBHOOK_HOST
+
+# ====== WEBHOOK HANDLERS ======
+# Registry: notification_type -> (caption_builder, reply_markup_builder)
+# Return tuple of (caption: str, reply_markup: InlineKeyboardMarkup | None)
+WEBHOOK_HANDLERS = {}
+
+
+def register_webhook_handler(
+    notification_type: str,
+    caption_builder: Callable,
+    reply_markup_builder: Optional[Callable] = None,
+) -> None:
+    """Register a webhook handler for a notification type.
+
+    Args:
+        notification_type: e.g., "MEDIA_PENDING"
+        caption_builder: Callable(payload: dict) -> str
+        reply_markup_builder: Optional callable(payload: dict) -> InlineKeyboardMarkup
+    """
+    WEBHOOK_HANDLERS[notification_type] = {
+        "caption": caption_builder,
+        "reply_markup": reply_markup_builder,
+    }
+
+
+# ====== BUILT-IN HANDLERS ======
+def _season_candidates(payload: dict) -> list:
+    """Extract season candidates from various payload locations."""
+    request_info = payload.get("request", {})
+    media_info = payload.get("media", {})
+    extra_info = payload.get("extra", [])
+
+    # Check request and media for season keys
+    for key in ("seasons", "requested_seasons", "requestedSeasons"):
+        if key in request_info:
+            seasons = request_info.get(key) or []
+            if seasons:
+                return seasons
+        if key in media_info:
+            seasons = media_info.get(key) or []
+            if seasons:
+                return seasons
+
+    # Check extra array for season information (Overseerr format)
+    if extra_info and isinstance(extra_info, list):
+        return extra_info
+
+    return []
+
+
+def _season_from_item(item) -> Optional[int]:
+    if isinstance(item, int):
+        return item
+    if isinstance(item, str) and item.isdigit():
+        return int(item)
+    if isinstance(item, dict):
+        # Check if it's an 'extra' format: {'name': 'Requested Seasons', 'value': '1'}
+        if item.get("name") == "Requested Seasons" and "value" in item:
+            value = item["value"]
+            # Handle comma-separated seasons like "1,2,3" or single season "1"
+            if isinstance(value, str):
+                return [int(s.strip()) for s in value.split(",") if s.strip().isdigit()]
+            if isinstance(value, int):
+                return value
+
+        # Check standard season fields
+        for field in ("seasonNumber", "season_number", "season", "number"):
+            value = item.get(field)
+            if isinstance(value, int):
+                return value
+            if isinstance(value, str) and value.isdigit():
+                return int(value)
+    return None
+
+
+def _extract_season_numbers(payload: dict) -> list[int]:
+    season_numbers: list[int] = []
+    for item in _season_candidates(payload):
+        season = _season_from_item(item)
+        if season is not None:
+            # Handle both single integers and lists
+            if isinstance(season, list):
+                season_numbers.extend(season)
+            else:
+                season_numbers.append(season)
+
+    return sorted(set(season_numbers))
+
+
+def _format_season_line(payload: dict) -> str:
+    seasons = _extract_season_numbers(payload)
+    if not seasons:
+        return ""
+    label = "Season" if len(seasons) == 1 else "Seasons"
+    season_list = ", ".join(str(season) for season in seasons)
+    return f"\n\n📺 {label}: {season_list}"
+
+
+def _build_media_pending_caption(payload: dict) -> str:
+    """Build caption for MEDIA_PENDING notification."""
+    media_type = payload.get("media", {}).get("media_type", "movie")
+    subject = payload.get("subject", "Unknown title")
+    request_info = payload.get("request", {})
+    username = request_info.get("requested_by_username", "")
+    email = request_info.get("requested_by_email", "")
+
+    requester = username.strip() if username else ""
+
+    # If username is empty, try email prefix as fallback
+    if not requester and email and "@" in email:
+        requester = email.split("@")[0].strip()
+
+    # Final fallback to "Someone"
+    if not requester:
+        requester = "Someone"
+
+    emoji = "📺" if media_type == "tv" else "🎬"
+    season_line = _format_season_line(payload) if media_type == "tv" else ""
+
+    return (
+        f"{emoji} *Request Pending Approval*\n{subject}"
+        f"{season_line}\n\n👤 Requested by: {requester}"
+    )
+
+
+def _build_media_pending_markup(payload: dict):
+    """Build inline buttons for MEDIA_PENDING."""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    request_id = payload.get("request", {}).get("request_id")
+    if not request_id:
+        return None
+
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✅ Approve", callback_data=f"approve_{request_id}"),
+                InlineKeyboardButton("❌ Decline", callback_data=f"decline_{request_id}"),
+            ]
+        ]
+    )
+
+
+def _build_media_available_caption(payload: dict) -> str:
+    """Build caption for MEDIA_AVAILABLE notification."""
+    media_type = payload.get("media", {}).get("media_type", "movie")
+    subject = payload.get("subject", "Unknown title")
+    emoji = "📺" if media_type == "tv" else "🎬"
+    season_line = _format_season_line(payload) if media_type == "tv" else ""
+
+    return f"{emoji} *Request Available!*\n{subject}{season_line}\n\n🍿 Ready to watch 🎉"
+
+
+def _build_media_failed_caption(payload: dict) -> str:
+    """Build caption for MEDIA_FAILED notification."""
+    subject = payload.get("subject", "Unknown title")
+    return (
+        f"⚠️ *Request Failed*\n\n{subject}\n\n"
+        f"❌ The request could not be processed.\n"
+        f"Check Radarr / Sonarr logs."
+    )
+
+
+# Register built-in handlers
+register_webhook_handler(
+    "MEDIA_PENDING",
+    caption_builder=_build_media_pending_caption,
+    reply_markup_builder=_build_media_pending_markup,
+)
+register_webhook_handler(
+    "MEDIA_AVAILABLE",
+    caption_builder=_build_media_available_caption,
+)
+register_webhook_handler(
+    "MEDIA_FAILED",
+    caption_builder=_build_media_failed_caption,
+)
+
+
+# ====== CALLBACK ACTION HANDLERS ======
+# Registry: callback_prefix -> handler function
+# Callable(action: str, data_parts: list[str], chat_id: int, query)
+CALLBACK_HANDLERS = {}
+
+
+def register_callback_handler(action_prefix: str, handler: Callable) -> None:
+    """Register a callback action handler.
+
+    Args:
+        action_prefix: e.g., "approve", "redownload"
+        handler: Callable(action: str, data_parts: list[str], chat_id: int, query)
+    """
+    CALLBACK_HANDLERS[action_prefix] = handler
+
+
+# Built-in callback handlers will be registered in bot.py to avoid circular imports
+
+
+# ====== VALIDATION ======
+def validate_config() -> None:
+    """Validate required config and raise ValueError if missing."""
+    for var_name, var_value in [
+        ("TELEGRAM_TOKEN", TELEGRAM_TOKEN),
+        ("OVERSEERR_API_KEY", OVERSEERR_API_KEY),
+        ("TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID_RAW),
+    ]:
+        if not var_value:
+            raise ValueError(f"{var_name} is not set")
+
+    try:
+        int(TELEGRAM_CHAT_ID_RAW)
+    except (TypeError, ValueError) as err:
+        raise ValueError("TELEGRAM_CHAT_ID must be an integer") from err
+
+
+def get_telegram_chat_id() -> int:
+    """Parse and return TELEGRAM_CHAT_ID as integer."""
+    return int(TELEGRAM_CHAT_ID_RAW)

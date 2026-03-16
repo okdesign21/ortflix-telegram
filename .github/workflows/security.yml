@@ -1,0 +1,66 @@
+name: Security - Ortflix Telegram
+
+on:
+  workflow_call:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+
+jobs:
+  trufflehog:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+  trivy-fs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy vulnerability scan on repository
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
+  trivy-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image for Telegram Bot
+        run: |
+          docker build -t ortflix-telegram-bot:scan .
+      - name: Run Trivy scan on built image
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          image-ref: 'ortflix-telegram-bot:scan'
+          format: 'table'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
