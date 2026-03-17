@@ -1,3 +1,4 @@
+# ruff: noqa: N999
 """Ortflix Telegram Bot - Overseerr integration for media requests."""
 
 try:
