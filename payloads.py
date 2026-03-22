@@ -17,8 +17,6 @@ def _normalize_request_keys(request: dict) -> dict:
         mapped["requested_by_username"] = mapped["requestedBy_username"]
     if "requestedBy_email" in mapped and "requested_by_email" not in mapped:
         mapped["requested_by_email"] = mapped["requestedBy_email"]
-    if "requestedBy_avatar" in mapped and "requested_by_avatar" not in mapped:
-        mapped["requested_by_avatar"] = mapped["requestedBy_avatar"]
     if "request_id" not in mapped and "id" in mapped:
         mapped["request_id"] = mapped["id"]
     return mapped

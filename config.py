@@ -160,7 +160,19 @@ def _format_season_line(payload: dict) -> str:
         return ""
     label = "Season" if len(seasons) == 1 else "Seasons"
     season_list = ", ".join(str(season) for season in seasons)
-    return f"\n\n📺 {label}: {season_list}"
+    return f"\n📺 {label}: {season_list}"
+
+
+def _format_profile_line(request_info: dict) -> str:
+    """Quality profile from Radarr (movies) or Sonarr (TV); same request fields for both."""
+    if not isinstance(request_info, dict):
+        return ""
+    name = request_info.get("profile_name") or request_info.get("profileName")
+
+    if name is None:
+        return ""
+
+    return f"\n *Profile:* {name}"
 
 
 def _build_media_pending_caption(payload: dict) -> str:
@@ -183,10 +195,11 @@ def _build_media_pending_caption(payload: dict) -> str:
 
     emoji = "📺" if media_type == "tv" else "🎬"
     season_line = _format_season_line(payload) if media_type == "tv" else ""
+    profile_line = _format_profile_line(request_info)
 
     return (
         f"{emoji} *Request Pending Approval*\n{subject}"
-        f"{season_line}\n\n👤 Requested by: {requester}"
+        f"{season_line}{profile_line}\n\n👤 Requested by: {requester}"
     )
 
 
@@ -221,8 +234,10 @@ def _build_media_available_caption(payload: dict) -> str:
 def _build_media_failed_caption(payload: dict) -> str:
     """Build caption for MEDIA_FAILED notification."""
     subject = payload.get("subject", "Unknown title")
+    request_info = payload.get("request") or {}
+    profile_line = _format_profile_line(request_info)
     return (
-        f"⚠️ *Request Failed*\n\n{subject}\n\n"
+        f"⚠️ *Request Failed*\n\n{subject}{profile_line}\n\n"
         f"❌ The request could not be processed.\n"
         f"Check Radarr / Sonarr logs."
     )
