@@ -164,20 +164,19 @@ def _format_season_line(payload: dict) -> str:
 
 
 def _format_profile_line(request_info: dict) -> str:
-    """Quality profile from Radarr (movies) or Sonarr (TV); same request fields for both."""
+    """Resolved quality profile name only (Seerr webhook request block has no profile fields)."""
     if not isinstance(request_info, dict):
         return ""
     name = request_info.get("profile_name") or request_info.get("profileName")
-
-    if name is None:
+    if not name or not str(name).strip():
         return ""
-
-    return f"\n *Profile:* {name}"
+    return f"\n\n🎚 *Profile:* {name}"
 
 
 def _build_media_pending_caption(payload: dict) -> str:
     """Build caption for MEDIA_PENDING notification."""
-    media_type = payload.get("media", {}).get("media_type", "movie")
+    media = payload.get("media") or {}
+    media_type = media.get("media_type") or media.get("mediaType", "movie")
     subject = payload.get("subject", "Unknown title")
     request_info = payload.get("request", {})
     username = request_info.get("requested_by_username", "")

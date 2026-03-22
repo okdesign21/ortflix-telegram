@@ -4,10 +4,11 @@ Handles webhooks and callback queries using extensible handler registry.
 """
 
 import datetime
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Any, Optional
 
 import aiohttp
 import uvicorn
@@ -32,7 +33,7 @@ from models import (
     MediaIntegrityWebhook,
     OverseerrWebhook,
 )
-from payloads import _normalize_overseerr_payload
+from payloads import _normalize_overseerr_payload, _normalize_request_keys
 
 # === LOGGING ===
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -125,7 +126,10 @@ async def call_overseerr_api(endpoint: str, method: str = "POST", json_data: dic
             if response.status >= 400:
                 error_text = await response.text()
                 raise Exception(f"Overseerr API error {response.status}: {error_text}")
-            return await response.json() if response.content_length else {}
+            body = await response.text()
+            if not body:
+                return {}
+            return json.loads(body)
     finally:
         close_result = session.close()
         if hasattr(close_result, "__await__"):
@@ -135,6 +139,68 @@ async def call_overseerr_api(endpoint: str, method: str = "POST", json_data: dic
 async def call_overseerr(request_id: str, action: str) -> None:
     """Call Overseerr API to approve or decline a request."""
     await call_overseerr_api(f"/api/v1/request/{request_id}/{action}")
+
+
+def _webhook_request_id(data: dict) -> Optional[str]:
+    """Resolve request id from embedded request or top-level template field."""
+    req = data.get("request")
+    if isinstance(req, dict):
+        rid = req.get("request_id") or req.get("id")
+        if rid is not None:
+            return str(rid)
+    top = data.get("request_id")
+    if top is not None:
+        return str(top)
+    return None
+
+
+async def _enrich_payload_with_seerr_request(data: dict) -> dict:
+    """Fill profile fields from Seerr API when the webhook body omits them.
+
+    Webhooks often lack `profileName`; single-request GET also omits it, so we
+    resolve the name via GET /service/radarr|sonarr/{serverId} when possible.
+    """
+    nt = data.get("notification_type")
+    if nt not in ("MEDIA_PENDING", "MEDIA_FAILED"):
+        return data
+
+    rid = _webhook_request_id(data)
+    if not rid:
+        return data
+
+    req_layer: dict[str, Any] = dict(data.get("request") or {})
+    try:
+        api_req = await call_overseerr_api(f"/api/v1/request/{rid}", method="GET")
+    except Exception as err:
+        logger.warning("Seerr request %s fetch failed (profile enrichment): %s", rid, err)
+        return data
+
+    merged_req = {**api_req, **req_layer}
+    if merged_req.get("id") is not None and merged_req.get("request_id") is None:
+        merged_req["request_id"] = merged_req["id"]
+    merged_req = _normalize_request_keys(merged_req)
+
+    pid = merged_req.get("profileId")
+    sid = merged_req.get("serverId")
+    name = merged_req.get("profileName") or merged_req.get("profile_name")
+    media = merged_req.get("media") if isinstance(merged_req.get("media"), dict) else {}
+    rtype = merged_req.get("type") or media.get("mediaType") or media.get("media_type") or "movie"
+
+    if name is None and pid is not None and sid is not None:
+        try:
+            if rtype == "tv":
+                svc = await call_overseerr_api(f"/api/v1/service/sonarr/{sid}", method="GET")
+            else:
+                svc = await call_overseerr_api(f"/api/v1/service/radarr/{sid}", method="GET")
+            for p in svc.get("profiles") or []:
+                if p.get("id") == pid:
+                    merged_req["profileName"] = p.get("name")
+                    break
+        except Exception as err:
+            logger.debug("Profile name resolve failed: %s", err)
+
+    out = {**data, "request": merged_req}
+    return out
 
 
 async def send_photo_or_message(image: Optional[str], caption: str, reply_markup=None) -> None:
@@ -387,12 +453,13 @@ async def overseerr_webhook(
             logger.info(f"Unhandled notification type: {payload.notification_type}")
             return {"status": "ok"}
 
-        caption = handler_info["caption"](normalized_payload)
+        working_payload = await _enrich_payload_with_seerr_request(normalized_payload)
+        caption = handler_info["caption"](working_payload)
         logger.debug(f"Built caption: {caption}")
 
         reply_markup = None
         if handler_info["reply_markup"]:
-            reply_markup = handler_info["reply_markup"](normalized_payload)
+            reply_markup = handler_info["reply_markup"](working_payload)
             logger.debug("Built reply_markup with buttons")
 
         await send_photo_or_message(
