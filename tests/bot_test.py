@@ -54,6 +54,7 @@ async def test_call_overseerr_approve(mock_env):
 
     mock_response = MagicMock()
     mock_response.status = 200
+    mock_response.text = AsyncMock(return_value='{"status":2,"id":123}')
     mock_session = MagicMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_response)
     mock_session.__aexit__ = AsyncMock()

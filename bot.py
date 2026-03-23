@@ -103,6 +103,12 @@ app = FastAPI(
 
 
 # === API HELPERS ===
+# Jellyseerr/Overseerr MediaRequestStatus (server/constants/media)
+_REQUEST_STATUS_PENDING = 1
+_REQUEST_STATUS_APPROVED = 2
+_REQUEST_STATUS_DECLINED = 3
+
+
 async def call_overseerr_api(endpoint: str, method: str = "POST", json_data: dict = None) -> dict:
     """Make an API call to Overseerr."""
     session = aiohttp.ClientSession()
@@ -115,18 +121,21 @@ async def call_overseerr_api(endpoint: str, method: str = "POST", json_data: dic
             "DELETE": session.delete,
         }.get(method_upper, session.request)
 
-        async with request_func(
-            f"{OVERSEERR_URL}{endpoint}",
-            json=json_data,
-            headers={
-                "X-Api-Key": OVERSEERR_API_KEY,
-                "Content-Type": "application/json",
-            },
-        ) as response:
+        headers = {"X-Api-Key": OVERSEERR_API_KEY}
+        if json_data is not None:
+            headers["Content-Type"] = "application/json"
+
+        kwargs: dict = {"headers": headers}
+        if json_data is not None:
+            kwargs["json"] = json_data
+
+        url = f"{OVERSEERR_URL}{endpoint}"
+        async with request_func(url, **kwargs) as response:
             if response.status >= 400:
                 error_text = await response.text()
                 raise Exception(f"Overseerr API error {response.status}: {error_text}")
             body = await response.text()
+            logger.info("Seerr API %s %s -> HTTP %s", method_upper, endpoint, response.status)
             if not body:
                 return {}
             return json.loads(body)
@@ -136,9 +145,39 @@ async def call_overseerr_api(endpoint: str, method: str = "POST", json_data: dic
             await close_result
 
 
+def _request_status_int(value) -> Optional[int]:
+    """Normalize API status field to int if present."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 async def call_overseerr(request_id: str, action: str) -> None:
-    """Call Overseerr API to approve or decline a request."""
-    await call_overseerr_api(f"/api/v1/request/{request_id}/{action}")
+    """Call Overseerr API to approve or decline a request.
+
+    Validates the response so we do not log success when the HTTP client got 2xx
+    from a proxy or redirect but the request record was not actually updated.
+    """
+    endpoint = f"/api/v1/request/{request_id}/{action}"
+    result = await call_overseerr_api(endpoint)
+    expected = {"approve": _REQUEST_STATUS_APPROVED, "decline": _REQUEST_STATUS_DECLINED}.get(action)
+    if expected is None:
+        return
+
+    got = _request_status_int(result.get("status"))
+    if got is None:
+        result = await call_overseerr_api(f"/api/v1/request/{request_id}", method="GET")
+        got = _request_status_int(result.get("status"))
+
+    if got != expected:
+        raise Exception(
+            f"Seerr request {request_id} {action} not confirmed: last known status={got!r} "
+            f"(expected {expected}). Check OVERSEERR_URL matches the Seerr instance you use in "
+            "the browser, and that the webhook button used the real request id."
+        )
 
 
 def _webhook_request_id(data: dict) -> Optional[str]:
