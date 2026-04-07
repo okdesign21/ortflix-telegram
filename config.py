@@ -49,6 +49,8 @@ def _get_service_url(
 # Service URLs (for both bot and tautulli script usage)
 # Supports both "seerr" (newer) and "overseerr" (legacy) as default hostnames
 OVERSEERR_URL = _get_service_url("OVERSEERR_URL", "seerr", 5055)
+# Same resolution as OVERSEERR_URL: RADARR_URL, or RADARR_HOST + RADARR_PORT.
+# Default host radarr matches typical Docker/Kubernetes service name on the same network/namespace.
 RADARR_URL = _get_service_url("RADARR_URL", "radarr", 7878)
 SONARR_URL = _get_service_url("SONARR_URL", "sonarr", 8989)
 
@@ -222,12 +224,28 @@ def _build_media_pending_markup(payload: dict):
 
 def _build_media_available_caption(payload: dict) -> str:
     """Build caption for MEDIA_AVAILABLE notification."""
-    media_type = payload.get("media", {}).get("media_type", "movie")
+    media = payload.get("media") or {}
+    media_type = media.get("media_type") or media.get("mediaType", "movie")
     subject = payload.get("subject", "Unknown title")
     emoji = "📺" if media_type == "tv" else "🎬"
     season_line = _format_season_line(payload) if media_type == "tv" else ""
+    request_info = payload.get("request") or {}
+    profile_line = _format_profile_line(request_info)
 
-    return f"{emoji} *Request Available!*\n{subject}{season_line}"
+    parts = [f"{emoji} *Request Available!*", f"{subject}{season_line}"]
+    if profile_line.strip():
+        parts.append(profile_line.strip())
+
+    quality = payload.get("downloaded_quality")
+    if quality:
+        parts.append(f"*Quality:* {quality}")
+
+    if media_type == "movie":
+        folder = payload.get("movie_folder")
+        if folder:
+            parts.append(f"*Folder:* `{folder}`")
+
+    return "\n".join(parts)
 
 
 def _build_media_failed_caption(payload: dict) -> str:

@@ -21,6 +21,8 @@ from config import (
     CALLBACK_HANDLERS,
     OVERSEERR_API_KEY,
     OVERSEERR_URL,
+    RADARR_API_KEY,
+    RADARR_URL,
     TELEGRAM_PORT,
     TELEGRAM_TOKEN,
     WEBHOOK_HOST,
@@ -200,7 +202,7 @@ async def _enrich_payload_with_seerr_request(data: dict) -> dict:
     resolve the name via GET /service/radarr|sonarr/{serverId} when possible.
     """
     nt = data.get("notification_type")
-    if nt not in ("MEDIA_PENDING", "MEDIA_FAILED"):
+    if nt not in ("MEDIA_PENDING", "MEDIA_FAILED", "MEDIA_AVAILABLE"):
         return data
 
     rid = _webhook_request_id(data)
@@ -239,6 +241,90 @@ async def _enrich_payload_with_seerr_request(data: dict) -> dict:
             logger.debug("Profile name resolve failed: %s", err)
 
     out = {**data, "request": merged_req}
+    return out
+
+
+def _radarr_quality_and_folder(movie: dict) -> tuple[Optional[str], Optional[str]]:
+    """Best-effort quality label and library folder path from a Radarr movie resource."""
+    if not isinstance(movie, dict):
+        return None, None
+    folder = movie.get("path")
+    if not folder or not str(folder).strip():
+        folder = None
+
+    mf = movie.get("movieFile")
+    if not isinstance(mf, dict):
+        return None, folder
+
+    quality = None
+    q = mf.get("quality")
+    if isinstance(q, dict):
+        inner = q.get("quality")
+        if isinstance(inner, dict):
+            quality = inner.get("name")
+        if not quality:
+            quality = q.get("name")
+    if isinstance(quality, str) and quality.strip():
+        return quality.strip(), folder
+    return None, folder
+
+
+async def call_radarr_api(endpoint: str) -> Any:
+    """GET JSON from Radarr v3 API."""
+    if not RADARR_API_KEY:
+        raise ValueError("RADARR_API_KEY is not set")
+    session = aiohttp.ClientSession()
+    try:
+        url = f"{RADARR_URL}{endpoint}"
+        headers = {"X-Api-Key": RADARR_API_KEY}
+        async with session.get(url, headers=headers) as response:
+            if response.status >= 400:
+                error_text = await response.text()
+                raise Exception(f"Radarr API error {response.status}: {error_text}")
+            return await response.json()
+    finally:
+        close_result = session.close()
+        if hasattr(close_result, "__await__"):
+            await close_result
+
+
+async def _enrich_media_available_from_radarr(data: dict) -> dict:
+    """Attach downloaded quality and on-disk folder for movies via Radarr (optional)."""
+    if data.get("notification_type") != "MEDIA_AVAILABLE":
+        return data
+    media = data.get("media") if isinstance(data.get("media"), dict) else {}
+    media_type = media.get("media_type") or media.get("mediaType") or "movie"
+    if media_type != "movie":
+        return data
+    if not RADARR_API_KEY:
+        return data
+
+    tmdb_raw = media.get("tmdbId") or media.get("tmdb_id")
+    if tmdb_raw is None:
+        return data
+    try:
+        tmdb_id = int(tmdb_raw)
+    except (TypeError, ValueError):
+        return data
+
+    try:
+        body = await call_radarr_api(f"/api/v3/movie?tmdbId={tmdb_id}")
+    except Exception as err:
+        logger.debug("Radarr movie lookup failed (tmdbId=%s): %s", tmdb_id, err)
+        return data
+
+    movie = None
+    if isinstance(body, list) and body:
+        movie = body[0]
+    elif isinstance(body, dict):
+        movie = body
+
+    quality, folder = _radarr_quality_and_folder(movie or {})
+    out = {**data}
+    if quality:
+        out["downloaded_quality"] = quality
+    if folder:
+        out["movie_folder"] = folder
     return out
 
 
@@ -493,6 +579,7 @@ async def overseerr_webhook(
             return {"status": "ok"}
 
         working_payload = await _enrich_payload_with_seerr_request(normalized_payload)
+        working_payload = await _enrich_media_available_from_radarr(working_payload)
         caption = handler_info["caption"](working_payload)
         logger.debug(f"Built caption: {caption}")
 

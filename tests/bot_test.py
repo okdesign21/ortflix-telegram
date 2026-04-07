@@ -196,7 +196,7 @@ async def test_media_integrity_webhook(mock_env, mock_telegram_bot):
 @pytest.mark.asyncio
 async def test_pydantic_models():
     """Test Pydantic model validation."""
-    from bot import CorruptedFileInfo, MediaIntegrityWebhook, OverseerrWebhook
+    from models import CorruptedFileInfo, MediaIntegrityWebhook, OverseerrWebhook
 
     # Test OverseerrWebhook model
     webhook = OverseerrWebhook(notification_type="MEDIA_PENDING", subject="Test Movie")
