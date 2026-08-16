@@ -3,7 +3,9 @@ FROM python:3.14-slim
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg mkvtoolnix && \
+    apt-get install -y --no-install-recommends \
+    ffmpeg=7:7.1.5-0+deb13u1 \
+    mkvtoolnix=92.0-1 && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy project files
