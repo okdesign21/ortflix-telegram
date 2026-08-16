@@ -240,8 +240,9 @@ async def _enrich_media_available_from_radarr(data: dict) -> dict:
 
 
 @router.post("/api/v1/webhooks/overseerr")
+@router.post("/api/v1/webhooks/seerr")
 async def overseerr_webhook(request: Request, x_webhook_token: Optional[str] = Header(None)):
-    """Handle Overseerr webhook notifications."""
+    """Handle Overseerr/Seerr webhook notifications."""
     if _sender is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Sender not set"

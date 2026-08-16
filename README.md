@@ -1,8 +1,8 @@
 # Ortflix Integrations
 
-[![Lint - Ortflix Integrations](https://github.com/okdesign21/ortflix-integrations/actions/workflows/lint.yml/badge.svg)](https://github.com/okdesign21/ortflix-integrations/actions/workflows/lint.yml)
-[![Security - Ortflix Integrations](https://github.com/okdesign21/ortflix-integrations/actions/workflows/security.yml/badge.svg)](https://github.com/okdesign21/ortflix-integrations/actions/workflows/security.yml)
-[![Tag & Publish - Integrations](https://github.com/okdesign21/ortflix-integrations/actions/workflows/release.yml/badge.svg)](https://github.com/okdesign21/ortflix-integrations/actions/workflows/release.yml)
+[![Lint - Ortflix Integrations](https://github.com/okdesign21/ortflix-integrations-bot/actions/workflows/lint.yml/badge.svg)](https://github.com/okdesign21/ortflix-integrations-bot/actions/workflows/lint.yml)
+[![Security - Ortflix Integrations](https://github.com/okdesign21/ortflix-integrations-bot/actions/workflows/security.yml/badge.svg)](https://github.com/okdesign21/ortflix-integrations-bot/actions/workflows/security.yml)
+[![Tag & Publish - Integrations](https://github.com/okdesign21/ortflix-integrations-bot/actions/workflows/release.yml/badge.svg)](https://github.com/okdesign21/ortflix-integrations-bot/actions/workflows/release.yml)
 
 Integrations service for Overseerr/Jellyseerr notifications, Telegram approvals, and media automations.
 
@@ -64,14 +64,14 @@ For local development, use the ignored operator override file:
 
 For Docker or compose deployments, the preferred mounted override file is:
 
-- `/config/ortflix/bot_settings.yaml`
+- `/config/bot_settings.yaml`
 
 The loader merges settings in this order:
 
 1. Bundled defaults from `config/bot_settings.yaml`
 2. Optional explicit path from `ORTFLIX_BOT_SETTINGS_FILE`
-3. Otherwise, the first available automatic override: `config/bot_settings.local.yaml`,
-   `/config/ortflix/bot_settings.yaml`, or `/config/bot_settings.yaml`
+3. Otherwise, the first available automatic override: `config/bot_settings.local.yaml`
+   or `/config/bot_settings.yaml`
 4. Per-setting environment variable overrides where supported by a script
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete file precedence,
@@ -145,6 +145,7 @@ Seerr must be reachable for profile enrichment. Radarr is only used to decorate 
 
 - `GET /health`
 - `POST /api/v1/webhooks/overseerr`
+- `POST /api/v1/webhooks/seerr` (alias)
 - `POST /api/v1/webhooks/media-check`
 - `POST /api/v1/webhooks/radarr`
 - `POST /api/v1/webhooks/sonarr`

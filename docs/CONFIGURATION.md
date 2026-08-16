@@ -16,10 +16,8 @@ Personal or deployment-specific settings should go in one of these override file
 | Location | Use |
 | --- | --- |
 | `config/bot_settings.local.yaml` | Local development or a checkout on one host. Ignored by Git. |
-| `/config/ortflix/bot_settings.yaml` | Docker Compose or Kubernetes mounted configuration. |
-| `/config/ortflix/bot_settings.yml` | Same as above, YAML extension alternative. |
-| `/config/bot_settings.yaml` | Legacy/simple mounted configuration path. |
-| `/config/bot_settings.yml` | Legacy/simple mounted YAML path. |
+| `/config/bot_settings.yaml` | Preferred Docker Compose or Kubernetes mounted configuration path. |
+| `/config/bot_settings.yml` | Same as above, YAML extension alternative. |
 | `ORTFLIX_BOT_SETTINGS_FILE` | Explicit path; takes precedence over automatic candidates. |
 ## Precedence
 
@@ -29,7 +27,6 @@ The loader deep-merges settings in this order:
 2. If `ORTFLIX_BOT_SETTINGS_FILE` is set, that explicit file is used as the override.
 3. Otherwise, the first automatic override found in this order:
    - `config/bot_settings.local.yaml`
-   - `/config/ortflix/bot_settings.yaml` or `.yml`
    - `/config/bot_settings.yaml` or `.yml`
 
 An explicit `ORTFLIX_BOT_SETTINGS_FILE` path must exist. Nested mappings are merged;
@@ -124,16 +121,16 @@ defaults where implemented.
 
 ## Docker and Kubernetes
 
-Mount the operator override at `/config/ortflix/bot_settings.yaml`:
+Mount the operator override at `/config/bot_settings.yaml`:
 
 ```yaml
 services:
   bot:
     volumes:
-      - ./config/bot_settings.local.yaml:/config/ortflix/bot_settings.yaml:ro
+      - ./config/bot_settings.local.yaml:/config/bot_settings.yaml:ro
 ```
 
-For Kubernetes, mount a ConfigMap at `/config/ortflix/bot_settings.yaml` and keep
+For Kubernetes, mount a ConfigMap at `/config/bot_settings.yaml` and keep
 tokens/API keys in Secrets. The bot reads the mounted file when each automation script
 starts.
 

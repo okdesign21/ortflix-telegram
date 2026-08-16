@@ -43,10 +43,11 @@ Core keys cover notifications and approvals; Radarr and Sonarr each use their ow
 ## Bot Endpoints
 
 1. `POST /api/v1/webhooks/overseerr`
-2. `POST /api/v1/webhooks/radarr`
-3. `POST /api/v1/webhooks/sonarr`
-4. `POST /api/v1/webhooks/tautulli`
-5. `POST /api/v1/webhooks/media-check`
+2. `POST /api/v1/webhooks/seerr` (alias)
+3. `POST /api/v1/webhooks/radarr`
+4. `POST /api/v1/webhooks/sonarr`
+5. `POST /api/v1/webhooks/tautulli`
+6. `POST /api/v1/webhooks/media-check`
 
 Header auth:
 
@@ -60,7 +61,7 @@ requests, but normal application startup rejects that configuration unless
 ## Overseerr/Seerr
 
 1. Open webhook or notifications settings.
-2. Set the webhook URL to `http://<bot-host>:7777/api/v1/webhooks/overseerr`.
+2. Set the webhook URL to either `http://<bot-host>:7777/api/v1/webhooks/overseerr` or `http://<bot-host>:7777/api/v1/webhooks/seerr`.
 3. Enable `MEDIA_PENDING`, `MEDIA_AVAILABLE`, and `MEDIA_FAILED`.
 4. Add the token header if enabled.
 5. Send a test event and confirm the bot logs and Telegram output.

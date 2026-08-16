@@ -55,8 +55,6 @@ LOCAL_BOT_SETTINGS_PATH = DEFAULT_BOT_SETTINGS_PATH.with_name("bot_settings.loca
 BOT_SETTINGS_ENV_VAR = "ORTFLIX_BOT_SETTINGS_FILE"
 BOT_SETTINGS_OVERRIDE_CANDIDATES = (
     LOCAL_BOT_SETTINGS_PATH,
-    Path("/config/ortflix/bot_settings.yaml"),
-    Path("/config/ortflix/bot_settings.yml"),
     Path("/config/bot_settings.yaml"),
     Path("/config/bot_settings.yml"),
 )

@@ -13,6 +13,7 @@ pytest_plugins = ["conf_test"]
     "endpoint,payload,expected",
     [
         ("/api/v1/webhooks/overseerr", {"notification_type": "PING"}, 200),
+        ("/api/v1/webhooks/seerr", {"notification_type": "PING"}, 200),
         (
             "/api/v1/webhooks/radarr",
             {"eventType": "MovieAdded", "movie": {"id": 10, "title": "Test Movie"}},
@@ -58,6 +59,7 @@ async def test_webhook_token_disabled_accepts_requests(
     "endpoint,payload",
     [
         ("/api/v1/webhooks/overseerr", {"notification_type": "PING"}),
+        ("/api/v1/webhooks/seerr", {"notification_type": "PING"}),
         (
             "/api/v1/webhooks/radarr",
             {"eventType": "MovieAdded", "movie": {"id": 10, "title": "Test Movie"}},

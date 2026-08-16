@@ -8,6 +8,8 @@ from httpx import ASGITransport, AsyncClient
 # Ensure fixtures from conf_test.py are discovered
 pytest_plugins = ["conf_test"]
 
+TEST_WEBHOOK_HEADERS = {"x-webhook-token": "test_webhook_token_123"}
+
 
 @pytest.mark.asyncio
 async def test_send_photo_or_message_with_photo(mock_telegram_bot, mock_env):
@@ -169,7 +171,33 @@ async def test_overseerr_webhook_pending(mock_env, mock_telegram_bot, sample_web
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/v1/webhooks/overseerr", json=sample_webhook_payload)
+        response = await client.post(
+            "/api/v1/webhooks/overseerr",
+            json=sample_webhook_payload,
+            headers=TEST_WEBHOOK_HEADERS,
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    mock_telegram_bot.send_photo.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_seerr_webhook_alias_pending(mock_env, mock_telegram_bot, sample_webhook_payload):
+    """Test Seerr alias route for pending media request."""
+    import bot as bot_module
+    from bot import app
+
+    bot_module.bot = mock_telegram_bot
+    bot_module.app_telegram = MagicMock()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/webhooks/seerr",
+            json=sample_webhook_payload,
+            headers=TEST_WEBHOOK_HEADERS,
+        )
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
@@ -217,7 +245,9 @@ async def test_radarr_webhook_ignored_event(mock_env, mock_telegram_bot):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/v1/webhooks/radarr", json=payload)
+        response = await client.post(
+            "/api/v1/webhooks/radarr", json=payload, headers=TEST_WEBHOOK_HEADERS
+        )
 
     assert response.status_code == 200
     body = response.json()
@@ -241,7 +271,9 @@ async def test_radarr_webhook_accepted_event(mock_env, mock_telegram_bot):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/v1/webhooks/radarr", json=payload)
+        response = await client.post(
+            "/api/v1/webhooks/radarr", json=payload, headers=TEST_WEBHOOK_HEADERS
+        )
 
     assert response.status_code == 200
     body = response.json()
@@ -267,7 +299,9 @@ async def test_sonarr_webhook_accepts_event(mock_env, mock_telegram_bot):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/v1/webhooks/sonarr", json=payload)
+        response = await client.post(
+            "/api/v1/webhooks/sonarr", json=payload, headers=TEST_WEBHOOK_HEADERS
+        )
 
     assert response.status_code == 200
     body = response.json()
@@ -300,7 +334,7 @@ async def test_media_integrity_webhook(mock_env, mock_telegram_bot):
         response = await client.post(
             "/api/v1/webhooks/media-check",
             json=payload,
-            headers={"x-webhook-token": "test_webhook_token_123"},
+            headers=TEST_WEBHOOK_HEADERS,
         )
 
     assert response.status_code == 200
