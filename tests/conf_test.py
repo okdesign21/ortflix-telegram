@@ -14,6 +14,7 @@ def mock_env(monkeypatch):
     monkeypatch.setenv("TELEGRAM_TOKEN", "test_token_123")
     monkeypatch.setenv("OVERSEERR_API_KEY", "test_api_key_123")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
+    monkeypatch.setenv("WEBHOOK_TOKEN", "test_webhook_token_123")
     monkeypatch.setenv("OVERSEERR_URL", "http://localhost:5055")
     monkeypatch.setenv("WEBHOOK_PORT", "7777")
     monkeypatch.setenv("WEBHOOK_HOST", "0.0.0.0")

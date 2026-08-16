@@ -1,4 +1,4 @@
-name: Security - Ortflix Telegram
+name: Security - Ortflix Integrations
 
 on:
   workflow_call:
@@ -52,14 +52,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Build Docker image for Telegram Bot
+      - name: Build Docker image for Integrations service
         run: |
-          docker build -t ortflix-telegram-bot:scan .
+          docker build -t ortflix-bot-addons:scan .
       - name: Run Trivy scan on built image
         uses: aquasecurity/trivy-action@master
         continue-on-error: true
         with:
-          image-ref: 'ortflix-telegram-bot:scan'
+          image-ref: 'ortflix-bot-addons:scan'
           format: 'table'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'

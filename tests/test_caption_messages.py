@@ -4,10 +4,10 @@ Radarr enrichment populates ``downloaded_quality`` and ``movie_folder`` on the
 payload before captions run; see ``bot._enrich_media_available_from_radarr``.
 
 Run from repo root:
-  cd ortflix-telegram && python -m pytest tests/test_caption_messages.py -v
+  cd ortflix-integrations-bot && python -m pytest tests/test_caption_messages.py -v
 """
 
-from config import (
+from app_config import (
     _build_media_available_caption,
     _build_media_failed_caption,
     _build_media_pending_caption,
@@ -46,7 +46,7 @@ def test_media_pending_movie_with_enriched_profile_name():
         },
     }
     out = _build_media_pending_caption(payload)
-    assert "🎚 *Profile:* HD" in out
+    assert "*Profile:* HD" in out
     assert "Space Pirate Captain Harlock (2013)" in out
 
 

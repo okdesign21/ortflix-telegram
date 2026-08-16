@@ -1,0 +1,105 @@
+shared:
+  plex:
+    url: http://localhost:32400
+    token_file: /run/secrets/plex_token
+
+  audio_language_map:
+    en: eng
+    ja: jpn
+    es: spa
+    de: deu
+    fr: fra
+    it: ita
+    ru: rus
+    pl: pol
+    he: heb
+    ar: ara
+    hu: hun
+    zh: zho
+    ko: kor
+    pt: por
+    nl: nld
+    sv: swe
+    da: dan
+    no: nor
+    fi: fin
+    cs: ces
+    tr: tur
+    hi: hin
+    ro: ron
+    el: ell
+    th: tha
+
+audio_fix:
+  radarr:
+    movies_dirs:
+      - /movies
+      - /movies-hdr
+    plex_section_id: "1"
+    default_language: eng
+    skip_folders: []
+    webhook_extensions:
+      - mkv
+      - mp4
+    bulk_extensions:
+      - mkv
+      - mp4
+      - avi
+
+  sonarr:
+    plex_section_id: "2"
+    default_language: eng
+    supported_extensions:
+      - mkv
+      - mp4
+    language_name_map:
+      english: eng
+      japanese: jpn
+      spanish: spa
+      german: deu
+      french: fra
+      italian: ita
+      russian: rus
+      polish: pol
+      hebrew: heb
+      arabic: ara
+      chinese: zho
+      korean: kor
+      portuguese: por
+      dutch: nld
+      turkish: tur
+      hindi: hin
+
+hdr_routing:
+  radarr:
+    hdr_root: /movies-hdr
+    profile_keywords:
+      - hdr
+
+  sonarr:
+    hdr_root: /tv-hdr
+    profile_keywords:
+      - hdr
+
+overseerr_requester_tagging:
+  request_query:
+    take: 100
+    skip: 0
+    filter: approved
+    sort: added
+  source_tag_label: overseer
+
+tautulli_watched:
+  watched_tag_suffix: watched
+  triage_tag_label: tbd
+  letterboxd_users: []
+
+plex_title_check:
+  default_asset_dir: /opt/kometa/config/assets/Movies_Shows
+  exception_mappings: /opt/kometa/tools/asset-organizer/exception_mappings.json
+  default_libraries:
+    - Films
+  guid_prefixes:
+    imdb://: imdb-
+    tmdb://: tmdb-
+    tvdb://: tvdb-

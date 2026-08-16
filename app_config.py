@@ -7,11 +7,18 @@ import os
 from typing import Callable, Optional
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse boolean env var from common truthy values."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # ====== UTILITIES ======
 def _clean_username(name: Optional[str]) -> Optional[str]:
     """Slugify username: ASCII alphanumeric + hyphens only (for display).
     Returns None if username contains non-ASCII characters.
-    Identical to tautulli_utils._clean_username for consistency.
     """
     if not name:
         return None
@@ -20,23 +27,20 @@ def _clean_username(name: Optional[str]) -> Optional[str]:
     cleaned = cleaned.strip("-")
     while "--" in cleaned:
         cleaned = cleaned.replace("--", "-")
-    # If no valid ASCII alphanumeric chars remain, return None for fallback
+    # If no valid ASCII alphanumeric chars remain, return None.
     if not cleaned or not any(ch.isascii() and ch.isalnum() for ch in cleaned):
         return None
     return cleaned
 
 
 # ====== SERVICE URLS ======
-def _get_service_url(
-    env_var: str, default_host: str, default_port: int, fallback_host: str = None
-) -> str:
+def _get_service_url(env_var: str, default_host: str, default_port: int) -> str:
     """Get service URL from env or construct from host:port.
 
     Args:
         env_var: Environment variable name for the URL (e.g., "OVERSEERR_URL")
         default_host: Primary default hostname
         default_port: Default port number
-        fallback_host: Optional fallback hostname to try if default_host doesn't resolve
     """
     url = os.getenv(env_var)
     if url:
@@ -47,7 +51,7 @@ def _get_service_url(
 
 
 # Service URLs (for both bot and tautulli script usage)
-# Supports both "seerr" (newer) and "overseerr" (legacy) as default hostnames
+# Supports both "seerr" and "overseerr" as default hostnames
 OVERSEERR_URL = _get_service_url("OVERSEERR_URL", "seerr", 5055)
 # Same resolution as OVERSEERR_URL: RADARR_URL, or RADARR_HOST + RADARR_PORT.
 # Default host radarr matches typical Docker/Kubernetes service name on the same network/namespace.
@@ -65,6 +69,7 @@ TELEGRAM_CHAT_ID_RAW = os.getenv("TELEGRAM_CHAT_ID")
 WEBHOOK_PORT = int(os.getenv("WEBHOOK_PORT", 7777))
 WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "0.0.0.0")  # nosec B104
 WEBHOOK_TOKEN = os.getenv("WEBHOOK_TOKEN")
+ALLOW_INSECURE_WEBHOOKS = _env_bool("ALLOW_INSECURE_WEBHOOKS", default=False)
 TELEGRAM_PORT = WEBHOOK_PORT
 TELEGRAM_HOST = WEBHOOK_HOST
 
@@ -186,11 +191,11 @@ def _build_media_pending_caption(payload: dict) -> str:
 
     requester = username.strip() if username else ""
 
-    # If username is empty, try email prefix as fallback
+    # If username is empty, try email prefix
     if not requester and email and "@" in email:
         requester = email.split("@")[0].strip()
 
-    # Final fallback to "Someone"
+    # Final default to "Someone"
     if not requester:
         requester = "Someone"
 
@@ -310,6 +315,12 @@ def validate_config() -> None:
         int(TELEGRAM_CHAT_ID_RAW)
     except (TypeError, ValueError) as err:
         raise ValueError("TELEGRAM_CHAT_ID must be an integer") from err
+
+    if not WEBHOOK_TOKEN and not ALLOW_INSECURE_WEBHOOKS:
+        raise ValueError(
+            "WEBHOOK_TOKEN is not set. Set WEBHOOK_TOKEN or explicitly allow insecure mode via "
+            "ALLOW_INSECURE_WEBHOOKS=true only on trusted private networks."
+        )
 
 
 def get_telegram_chat_id() -> int:

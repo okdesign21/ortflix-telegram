@@ -1,4 +1,4 @@
-name: Tag & Publish - Telegram
+name: Tag & Publish - Integrations
 
 on:
   push:
@@ -42,7 +42,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: telegram-bot-python-package
+          name: integrations-python-package
           path: dist/
 
   build-and-push-docker-image:
@@ -62,7 +62,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}/telegram-bot
+          images: |
+            ghcr.io/${{ github.repository }}/bot-addons
+            ghcr.io/${{ github.repository }}/telegram-bot
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -84,7 +86,7 @@ jobs:
       - name: Download Python package artifacts
         uses: actions/download-artifact@v8
         with:
-          name: telegram-bot-python-package
+          name: integrations-python-package
           path: ./release-assets/packages
       - name: Prepare release assets
         run: |

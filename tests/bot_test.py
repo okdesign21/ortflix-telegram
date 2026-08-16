@@ -85,13 +85,50 @@ def test_environment_variables_required(monkeypatch):
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
 
     # Reload config module to pick up deleted env vars
-    if "config" in sys.modules:
-        del sys.modules["config"]
+    if "app_config" in sys.modules:
+        del sys.modules["app_config"]
 
-    from config import validate_config
+    from app_config import validate_config
 
     with pytest.raises(ValueError, match="TELEGRAM_TOKEN"):
         validate_config()
+
+
+def test_webhook_token_required_unless_explicit_override(monkeypatch):
+    """Webhook token must be configured unless insecure mode is explicitly allowed."""
+    import sys
+
+    monkeypatch.setenv("TELEGRAM_TOKEN", "test_token")
+    monkeypatch.setenv("OVERSEERR_API_KEY", "test_api_key")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
+    monkeypatch.delenv("WEBHOOK_TOKEN", raising=False)
+    monkeypatch.delenv("ALLOW_INSECURE_WEBHOOKS", raising=False)
+
+    if "app_config" in sys.modules:
+        del sys.modules["app_config"]
+
+    from app_config import validate_config
+
+    with pytest.raises(ValueError, match="WEBHOOK_TOKEN is not set"):
+        validate_config()
+
+
+def test_webhook_token_override_allows_insecure_mode(monkeypatch):
+    """Explicit insecure override should allow startup without webhook token."""
+    import sys
+
+    monkeypatch.setenv("TELEGRAM_TOKEN", "test_token")
+    monkeypatch.setenv("OVERSEERR_API_KEY", "test_api_key")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
+    monkeypatch.delenv("WEBHOOK_TOKEN", raising=False)
+    monkeypatch.setenv("ALLOW_INSECURE_WEBHOOKS", "true")
+
+    if "app_config" in sys.modules:
+        del sys.modules["app_config"]
+
+    from app_config import validate_config
+
+    validate_config()
 
 
 def test_webhook_payload_validation(sample_webhook_payload):
@@ -165,6 +202,80 @@ async def test_overseerr_webhook_with_token(mock_env, mock_telegram_bot, sample_
 
 
 @pytest.mark.asyncio
+async def test_radarr_webhook_ignored_event(mock_env, mock_telegram_bot):
+    """Events with no configured scripts should return ignored."""
+    import bot as bot_module
+    from bot import app
+
+    bot_module.bot = mock_telegram_bot
+    bot_module.app_telegram = MagicMock()
+
+    payload = {
+        "eventType": "Rename",
+        "movie": {"id": 10, "title": "Test Movie"},
+    }
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/v1/webhooks/radarr", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ignored"
+    assert body["event_type"] == "Rename"
+
+
+@pytest.mark.asyncio
+async def test_radarr_webhook_accepted_event(mock_env, mock_telegram_bot):
+    """Mapped events should schedule configured scripts."""
+    import bot as bot_module
+    from bot import app
+
+    bot_module.bot = mock_telegram_bot
+    bot_module.app_telegram = MagicMock()
+
+    payload = {
+        "eventType": "MovieAdded",
+        "movie": {"id": 10, "title": "Test Movie"},
+    }
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/v1/webhooks/radarr", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "accepted"
+    assert body["event_type"] == "MovieAdded"
+    assert body["scheduled"] == 1
+    assert "route_hdr_on_import_radarr.py" in body["scripts"]
+
+
+@pytest.mark.asyncio
+async def test_sonarr_webhook_accepts_event(mock_env, mock_telegram_bot):
+    """Sonarr router should accept valid event payloads."""
+    import bot as bot_module
+    from bot import app
+
+    bot_module.bot = mock_telegram_bot
+    bot_module.app_telegram = MagicMock()
+
+    payload = {
+        "eventType": "Download",
+        "series": {"id": 20, "title": "Test Show"},
+    }
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/v1/webhooks/sonarr", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "accepted"
+    assert body["event_type"] == "Download"
+
+
+@pytest.mark.asyncio
 async def test_media_integrity_webhook(mock_env, mock_telegram_bot):
     """Test media integrity check webhook."""
     import bot as bot_module
@@ -186,7 +297,11 @@ async def test_media_integrity_webhook(mock_env, mock_telegram_bot):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/v1/webhooks/media-check", json=payload)
+        response = await client.post(
+            "/api/v1/webhooks/media-check",
+            json=payload,
+            headers={"x-webhook-token": "test_webhook_token_123"},
+        )
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
@@ -196,7 +311,7 @@ async def test_media_integrity_webhook(mock_env, mock_telegram_bot):
 @pytest.mark.asyncio
 async def test_pydantic_models():
     """Test Pydantic model validation."""
-    from models import CorruptedFileInfo, MediaIntegrityWebhook, OverseerrWebhook
+    from integrations.models import CorruptedFileInfo, MediaIntegrityWebhook, OverseerrWebhook
 
     # Test OverseerrWebhook model
     webhook = OverseerrWebhook(notification_type="MEDIA_PENDING", subject="Test Movie")

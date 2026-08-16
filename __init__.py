@@ -1,18 +1,20 @@
 # ruff: noqa: N999
-"""Ortflix Telegram Bot - Overseerr integration for media requests."""
+"""Ortflix integrations service for notifications and media automations."""
 
 try:
     from importlib.metadata import version
 
-    __version__ = version("ortflix-telegram-bot")
+    try:
+        __version__ = version("ortflix-integrations")
+    except Exception:
+        __version__ = version("ortflix-telegram-bot")
 except Exception:
     __version__ = "0.0.0+unknown"
 
 __author__ = "okdesign21"
 __license__ = "MIT"
 __description__ = (
-    "Telegram bot for Ortflix - integrates with Overseerr for media "
-    "request notifications and approvals"
+    "Ortflix integrations service for Overseerr notifications and Radarr automation hooks"
 )
 
 

@@ -1,0 +1,10 @@
+# Fetures and upgrades
+- slash commands to activate manuall stuff
+- scan librery files (from dropdown of my libriries)
+- restart the server
+- display dockers status (/pods if k8s)
+- size lef on disk / size of each media folder (TV/Downloads,Movies ect)
+
+# General
+- change repo name? make sure its ortflix-integrations-bot now
+- add clear user mannual

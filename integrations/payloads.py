@@ -1,4 +1,4 @@
-"""Payload normalization for Overseerr webhooks."""
+"""Payload normalization for webhook inputs."""
 
 
 def _is_placeholder(value) -> bool:
@@ -50,5 +50,20 @@ def _normalize_overseerr_payload(raw: dict) -> dict:
             normalized[key] = value
         else:
             normalized[key] = value
+
+    return normalized
+
+
+def _normalize_radarr_payload(raw: dict) -> dict:
+    """Normalize Radarr payload event key casing and nested objects."""
+    if not isinstance(raw, dict):
+        return {}
+
+    normalized = dict(raw)
+    # Keep both keys but guarantee the canonical eventType key exists when possible.
+    if "eventType" not in normalized and "event" in normalized:
+        normalized["eventType"] = normalized.get("event")
+    if "event" not in normalized and "eventType" in normalized:
+        normalized["event"] = normalized.get("eventType")
 
     return normalized

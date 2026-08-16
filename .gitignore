@@ -8,6 +8,7 @@ __pycache__/
 .coverage
 .coverage.*
 htmlcov/
+logs/*.log
 
 # Packaging artifacts
 build/
@@ -21,6 +22,10 @@ venv/
 .env
 .env.local
 
+# Operator-specific automation settings
+config/bot_settings.local.yaml
+config/bot_settings.local.yml
+
 # OS/editor
 .DS_Store
 .vscode/
@@ -28,3 +33,5 @@ venv/
 *.swp
 *.swo
 *~
+
+docs/AUDIT*

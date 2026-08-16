@@ -47,3 +47,12 @@ class MediaIntegrityWebhook(BaseModel):
     summary_message: Optional[str] = "Media integrity check alert"
     count: int = 0
     files: list[CorruptedFileInfo] = Field(default_factory=list)
+
+
+class RadarrWebhook(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    event_type: Optional[str] = Field(None, alias="eventType")
+    event: Optional[str] = None
+    movie: dict = Field(default_factory=dict)
+    movie_file: dict = Field(default_factory=dict, alias="movieFile")

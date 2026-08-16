@@ -1,14 +1,12 @@
 """Tests for Radarr movie JSON parsing (no HTTP)."""
 
-from bot import _radarr_quality_and_folder
+from integrations.overseerr_integration import _radarr_quality_and_folder
 
 
 def test_radarr_quality_nested_quality_object():
     movie = {
         "path": "/movies/Example (2020)",
-        "movieFile": {
-            "quality": {"quality": {"name": "Bluray-1080p"}, "revision": {"version": 1}}
-        },
+        "movieFile": {"quality": {"quality": {"name": "Bluray-1080p"}, "revision": {"version": 1}}},
     }
     q, folder = _radarr_quality_and_folder(movie)
     assert q == "Bluray-1080p"

@@ -43,7 +43,7 @@ export WEBHOOK_PORT="${WEBHOOK_PORT:-7777}"
 export WEBHOOK_TOKEN="${WEBHOOK_TOKEN:-$(read_secret webhook_token)}"
 export OVERSEERR_URL="${OVERSEERR_URL:-http://localhost:5055}"
 export WEBHOOK_HOST="${WEBHOOK_HOST:-0.0.0.0}"
-export WEBHOOK_PATH="${WEBHOOK_PATH:-/overseerr/requests}"
+export WEBHOOK_PATH="${WEBHOOK_PATH:-/api/v1/webhooks/overseerr}"
 
 cd "$ROOT_DIR"
 
