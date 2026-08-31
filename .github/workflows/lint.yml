@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Run hadolint on Dockerfile
-        uses: hadolint/hadolint-action@v3.3.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: dockerfile
           failure-threshold: warning
